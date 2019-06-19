@@ -169,19 +169,12 @@ class Vectorizer(object):
 
     ########################### PRIVATE FUNCTIONS #############################
 
-    def _try_parsing_date(self, dt_str):
-        # TODO: add potential datetime format if possible
-        for fmt in ('%m/%d/%Y', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S', '%m/%d/%Y %H:%M', '%m/%d/%y', '%m/%d/%y %H:%M:%S', '%m/%d/%Y %H:%M:%S', '%m-%d-%Y', '%m-%d-%Y %H:%M'):
-            try: return datetime.strptime(dt_str, fmt)
-            except ValueError: pass
-        raise ValueError('No valid datetime format found for '+dt_str)
-
     def _DT_standardizer(self, dt_str):
         if not dt_str: return None
         # use 1900-1-1 00:00:00 as base datetime
         base = datetime.strptime('01/01/1900', '%m/%d/%Y')
         # use time delta of base time to event time as rep
-        std_dt = self._try_parsing_date(dt_str) - base
+        std_dt = _try_parsing_date(dt_str) - base
         # convert time delta from seconds to 12-hour bucket-size integer
         std_dt = int(std_dt.total_seconds() / 3600)
         if std_dt <= 0: return None
@@ -214,7 +207,7 @@ class Vectorizer(object):
                 # short-circuit code_system too general
             if not system or len(system.split('.')) < 7: continue
             if code and system:
-                code = ':'.join([self.code_system[system], str(code)])
+                code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
                 output.append((s, 'MED', index, np.asscalar(self.time_norm.transform(delta))))
@@ -238,7 +231,7 @@ class Vectorizer(object):
             code = allergen['allergen']['code']
             system = allergen['allergen']['code_system']
             if code and system:
-                code = ':'.join([self.code_system[system], str(code)])
+                code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
                 output.append((s, 'ALG', index, np.asscalar(self.time_norm.transform(delta))))
@@ -260,7 +253,7 @@ class Vectorizer(object):
                 # short-circuit code_system too general
             if not system or len(system.split('.')) < 7: continue
             if code and system:
-                code = ':'.join([self.code_system[system], str(code)])
+                code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
                 output.append((date, 'IMU', index, 0))
@@ -306,7 +299,7 @@ class Vectorizer(object):
                     # trim some code_system that too complicated
                     if (system.startswith('2')) and (len(system.split('.')) > 7):
                         system = '.'.join(system.split('.')[:7])
-                    try: code = ':'.join([self.code_system[system], str(code)])
+                    try: code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                     except KeyError: continue
 #                    code = test_code+'--'+code
                     try: index = self.all_variables.index(code)
@@ -332,7 +325,7 @@ class Vectorizer(object):
                 if code and system:
                     # trim some code_system that too complicated
                     if (system.startswith('2')) and (len(system.split('.')) > 7): system = '.'.join(system.split('.')[:7])
-                    try: code = ':'.join([self.code_system[system], str(code)])
+                    try: code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                     except KeyError: continue
                     try: index = self.all_variables.index(code)
                     except ValueError: continue
@@ -363,7 +356,7 @@ class Vectorizer(object):
             if code and system:
                 # trim some code_system that too complicated
                 if (system.startswith('2')) and (len(system.split('.')) > 7): system = '.'.join(system.split('.')[:7])
-                try: code = ':'.join([self.code_system[system], str(code)])
+                try: code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 except KeyError: code = ':'.join([system, str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
@@ -383,7 +376,7 @@ class Vectorizer(object):
             if code and system:
                 # trim some code_system that too complicated
                 if (system.startswith('2')) and (len(system.split('.')) > 7): system = '.'.join(system.split('.')[:7])
-                try: code = ':'.join([self.code_system[system], str(code)])
+                try: code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 except KeyError: code = ':'.join([system, str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
@@ -406,7 +399,7 @@ class Vectorizer(object):
             code = record['code']
             system = record['code_system']
             if code and system:
-                code = ':'.join([self.code_system[system], str(code)])
+                code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                 try: index = self.all_variables.index(code)
                 except ValueError: continue
                 output.append((s, 'HTR', index, np.asscalar(self.time_norm.transform(delta))))
@@ -437,7 +430,7 @@ class Vectorizer(object):
                     if str(value) in str(test['name']) or 'lot number' in str(test['name']).lower(): value = 1
                     
                     if (system.startswith('2')) and (len(system.split('.')) > 7): system = '.'.join(system.split('.')[:7])
-                    code = ':'.join([self.code_system[system], str(code)])
+                    code = ':'.join([self.code_system[system.replace('2.16.840.1.000000', '2.16.840.1.113883')], str(code)])
                     try: index = self.all_variables.index(code)
                     except ValueError: continue
                     
@@ -484,3 +477,104 @@ class Vectorizer(object):
             for i in text: output.append((date, 'TXT', i+len(self.all_variables), 0))
         
         return list(set(output))
+
+class ClaimVectorizer(object):
+    """
+    Aim to extract and vectorize EHR CCD data into common claims codes
+    """
+    def __init__(self):
+        """
+        Initialize a vectorizer to repeat use; load section variable spaces
+        """
+        self.code_system   = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pickle_files','code_system'),"rb"))
+        self.rxnorm_to_gpi = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pickle_files','rxnorm_to_gpi'),"rb"))
+        self.snomed_to_icd = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)),'pickle_files','snomed_to_icd'),"rb"))
+        
+    def fit_transform(self, ehr, date_start=None):
+        if not date_start: date_start = datetime.strptime('01/01/1900', '%m/%d/%Y')
+        else: date_start = datetime.strptime(date_start, '%Y-%m-%d')
+        output = []
+    
+        output += _general_code_extract('medications', ehr, self.code_system, date_start)
+        output += _general_code_extract('immunizations', ehr, self.code_system, date_start)
+        output += _hierachical_code_extract('results', 'tests', ehr, self.code_system, date_start)
+        output += _general_code_extract('problems', ehr, self.code_system, date_start)
+        output += _hierachical_code_extract('encounters', 'findings', ehr, self.code_system, date_start)
+        output += _general_code_extract('procedures', ehr, self.code_system, date_start)
+        output += _hierachical_code_extract('vital', 'results', ehr, self.code_system, date_start)
+        
+        output = [self.rxnorm_to_gpi[c] if c in self.rxnorm_to_gpi else c for c in output]
+        output = [self.snomed_to_icd[c] if c in self.snomed_to_icd else c for c in output]
+        return list(set(output))
+
+############################# PRIVATE FUNCTIONS ###############################
+
+def _try_parsing_date(dt_str):
+    if not dt_str: return None
+    # TODO: add potential datetime format if possible
+    for fmt in ('%m/%d/%Y', '%Y-%m-%dT%H:%M:%SZ', '%Y-%m-%dT%H:%M:%S', '%m/%d/%Y %H:%M', '%m/%d/%y', '%m/%d/%y %H:%M:%S', '%m/%d/%Y %H:%M:%S', '%m-%d-%Y', '%m-%d-%Y %H:%M'):
+        try: return datetime.strptime(dt_str, fmt)
+        except ValueError: pass
+    raise ValueError('No valid datetime format found for '+dt_str)
+
+def _general_code_extract(tag, ehr, code_system, date_start):
+    if tag not in ehr.keys(): return []
+    output = []
+    for product in ehr[tag]:
+        try: date = _try_parsing_date(product['date_range']['start'])
+        except KeyError: date = _try_parsing_date(product['date'])
+        if not date or date<date_start: continue
+        
+        if tag == 'medications' or tag == 'immunizations': product = product['product']
+        code = product['code']
+        system = product['code_system']
+        if (not code) or (not system):
+            if 'translation' in product:
+                code = product['translation']['code']
+                system = product['translation']['code_system']
+            else: continue
+            # short-circuit code_system too general
+        if not system or len(system.split('.')) < 7: continue
+        if code and system:
+            # trim some code_system that too complicated
+            if (system.startswith('2')) and (len(system.split('.')) > 7): system = '.'.join(system.split('.')[:7]).replace('2.16.840.1.000000', '2.16.840.1.113883')
+            try:
+                code = '-'.join([code_system[system], str(code)])
+                output.append(code)
+            except: continue
+    return output
+
+def _hierachical_code_extract(tag, sub_tag, ehr, code_system, date_start):
+    if tag not in ehr.keys(): return []
+    output = []
+    for results in ehr[tag]:
+        try:
+            date = _try_parsing_date(results['date'])
+            if not date or date<date_start: continue
+        except KeyError: pass
+
+        for test in results[sub_tag]:
+            try:
+                date = _try_parsing_date(results['date'])
+                if not date or date<date_start: continue
+            except KeyError: pass
+
+            code = test['code']
+            system = test['code_system']
+            # if code or code_system not available, ckeck out translations
+            if (not code) or (not system):
+                if 'translation' in test:
+                    code = test['translation']['code']
+                    system = test['translation']['code_system']
+                else: continue
+                # short-circuit code_system too general
+            if not system or len(system.split('.')) < 7: continue
+            if code and system:
+                # trim some code_system that too complicated
+                if (system.startswith('2')) and (len(system.split('.')) > 7):
+                    system = '.'.join(system.split('.')[:7]).replace('2.16.840.1.000000', '2.16.840.1.113883')
+                try:
+                    code = '-'.join([code_system[system], str(code)])
+                    output.append(code)
+                except KeyError: continue
+    return output

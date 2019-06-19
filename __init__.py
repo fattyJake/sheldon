@@ -36,7 +36,6 @@ from datetime import datetime
 from tqdm import tqdm
 import zipfile
 
-import numpy as np
 import pandas as pd
 
 class Parser(object):
@@ -137,10 +136,10 @@ def member_json(member='KC87853B', client='HEALTHFIRST', sections=[]):
     
     # initialize    
     output = {}
-    meta = full_info.fetch_db.info(member, client.upper())
+    meta = full_info.fetch_db.info(member, client)
     output['meta'] = meta
     
-    if meta is None: return ''
+    if not meta: return ''
     filepaths = meta['ccds']
     if filepaths is None: return ''
     
@@ -153,6 +152,7 @@ def member_json(member='KC87853B', client='HEALTHFIRST', sections=[]):
         # parse into text
         for file in file_list:
             xmlContent = io.TextIOWrapper(zf.open(file,'r'), encoding='utf-8').read()
+            if not re.sub(r'\s', '', xmlContent): continue
             ccd = Parser(xmlContent)
             parsed_data = json.loads(ccd.data.json())
             ccd = {k:v for k,v in parsed_data.items() if v}
@@ -221,7 +221,7 @@ def file_processor(filepaths):
                 parsed_data = json.loads(ccd.data.json())
                 ccd = {k:v for k,v in parsed_data.items() if v}
                 _update_rec(output, ccd)
-        
+
         if output:
             parent_path = os.path.dirname(os.path.realpath(filepath))
             filename = os.path.split(filepath)[1].replace('.zip','').replace('.xml','').replace('.ZIP','').replace('.XML','')
@@ -315,99 +315,11 @@ def member_text(member='KC87853B', client='HEALTHFIRST', sections=[], excludeCod
             xmlContent = io.TextIOWrapper(zf.open(file,'r'), encoding='utf-8').read()
             ccd = Parser(xmlContent)
             parsed_data = json.loads(ccd.data.json())
-            ccd = full_info.ehr.generate_text_from_CCD(parsed_data, excludeCode=False, excludeNone=True)
+            ccd = full_info.dumb_parser.generate_text_from_CCD(parsed_data, excludeCode=False, excludeNone=True)
             ccd = {k:v for k,v in ccd.items() if v}
             output.update(ccd)
     if sections != []: output = {k:v for k,v in output.items() if k in sections}
     return text_seperator.join([re.sub(r'_', ' ', k)+'\n\n'+v for k,v in output.items()])
-
-def get_exemplars(icdCode='ICD10-I10', balancing=False, date_start=None, date_end=None):
-    """
-    Get positive and negative members who have certain ICD codes
-    
-    @param icdCode: a single ICD code string or a list of ICD codes; if list of codes, positive memebers are
-        those who have all the codes in the list
-    @param balancing: normally positive exemplars are much fewer than negative ones, if True, even the number of two groups
-    @param date_start: YYYY-MM-DD
-    @param date_end: YYYY-MM-DD
-    
-    Return
-    --------
-    Two lists of member client ID of positives and negatives; elements in lists are like [database:memberID]
-
-    Examples
-    --------
-    >>> from sheldon import get_exemplars
-    >>> get_exemplars(icdCode='ICD10-I10', balancing=False)
-
-    """
-    member_codes    = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)),r'pickle_files',r'member_codes'),"rb"))
-    client_mappings = pickle.load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)),r'pickle_files',r'client_mappings'),"rb"))
-    
-    # initialize
-    if date_start and date_end:
-        for k,v in member_codes.items():
-            client, member = k.split(":")
-            client, db = client_mappings[client]
-            codes = full_info.fetch_db.claims(member, client, db, date_start, date_end)
-            if codes: member_codes[k] = codes
-    
-    positives = []
-    negatives = []
-    
-    if isinstance(icdCode, str):
-        for k, v in member_codes.items():
-            if icdCode in v: positives.append(k)
-            else: negatives.append(k)
-    if isinstance(icdCode, list):
-        for k, v in member_codes.items():
-            if np.sum([(icd in v) for icd in icdCode]) == len(icdCode): positives.append(k)
-            else: negatives.append(k)
-    
-    # balance exemplars if needed
-    if balancing:
-        if len(positives) < len(negatives): negatives = random.sample(negatives, len(positives))
-        elif len(positives) > len(negatives): positives = random.sample(positives, len(negatives))
-
-    return [positives, negatives]
-
-def generate_text_inputs(icdCode, sections=[], balancing=False):
-    """
-    Generate training inputs based on positive and negative condition of certain ICD codes
-    
-    @param icdCode: a single ICD code string or a list of ICD codes; if list of codes, positive memebers are
-        those who have all the codes in the list
-    @param sections: predefined sections to seek, else all present
-    @param balancing: normally positive exemplars are much fewer than negative ones, if True, even the number of two groups
-
-    
-    Return
-    --------
-    Two dicts of positives and negatives, {k:member, v:full CCD text}
-
-    Examples
-    --------
-    >>> from sheldon import generate_text_inputs
-    >>> positives, negatives = generate_text_inputs(icdCode='CPT-86360', sections=['medications'], balancing=True)
-    
-    """
-    # initialize
-    pos, neg = get_exemplars(icdCode, balancing)
-
-    # load text
-    positives = {}
-    print('Loading positives...')
-    for i in tqdm(pos):
-        client, member = i.split(':')
-        try: positives[member] = member_text(member, client, sections)
-        except Exception as e: print(member, client, str(e))
-    negatives = {}
-    print('\nLoading negatives...')
-    for i in tqdm(neg):
-        client, member = i.split(':')
-        try: negatives[member] = member_text(member, client, sections)
-        except Exception as e: print(member, client, str(e))
-    return [positives, negatives]
 
 ############################# PRIVATE FUNCTIONS ###############################
 

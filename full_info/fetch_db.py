@@ -211,8 +211,12 @@ def _ccdID_to_path(packageID):
     cursor = pyodbc.connect(r'DRIVER=SQL Server;'r'SERVER=EQBWDB1;').cursor()
 
     # fetch results
-    ccds = cursor.execute("""
-        SELECT Id, [ArchiveFilePath] 
-        FROM [EnterpriseApplications.Queue].[EnterpriseWorkflow].[Package] WITH(NOLOCK)
-        WHERE Id IN ("""+','.join(['\''+str(i)+'\'' for i in packageID if i is not None])+""")""")
-    return [i[1] for i in ccds]
+    ccds = None
+    for table in ['Package', 'Package_Archive']:
+        ccds = cursor.execute("""
+            SELECT Id, [ArchiveFilePath] 
+            FROM [EnterpriseApplications.Queue].[EnterpriseWorkflow].["""+table+"""] WITH(NOLOCK)
+            WHERE Id IN ("""+','.join(['\''+str(i)+'\'' for i in packageID if i is not None])+""")""")
+        paths = [i[1] for i in ccds]
+        if paths: break
+    return paths
