@@ -19,17 +19,19 @@ import matplotlib.pyplot as plt
 # Give a folder path as an argument with 'log_dir' to save
 # TensorBoard summaries. Default is a log folder in current directory.
 
-log_dir = 'w2v_logs'
+log_dir = "w2v_logs"
 
 # Step 1: Download the data.
-with open('TLSTM_READM_NEW','rb') as f:
+with open("TLSTM_READM_NEW", "rb") as f:
     T = pickle.load(f)
     X = pickle.load(f)
     Q = pickle.load(f)
     y = pickle.load(f)
 
 vocabulary = X.tolist()
-vocabulary = [[idx for idx in sequence if idx != 40168] for sequence in vocabulary]
+vocabulary = [
+    [idx for idx in sequence if idx != 40168] for sequence in vocabulary
+]
 data = list(itertools.chain.from_iterable(vocabulary))
 
 # Step 2: Build the dictionary and replace rare words with UNK token.
@@ -37,17 +39,22 @@ vocabulary_size = 40168
 
 vec = Vectorizer()
 id2token = dict(zip(vec.vocab.token2id.values(), vec.vocab.token2id.keys()))
+
+
 def get_variables(i):
-    if i >= len(vec.all_variables): return id2token[i-len(vec.all_variables)]
-    else: return vec.all_variables[i]
+    if i >= len(vec.all_variables):
+        return id2token[i - len(vec.all_variables)]
+    else:
+        return vec.all_variables[i]
+
 
 reverse_dictionary = {i: get_variables(i) for i in range(40168)}
 dictionary = dict(zip(reverse_dictionary.values(), reverse_dictionary.keys()))
 count = [list(i) for i in zip(dictionary.keys(), dictionary.values())]
 
 del vocabulary  # Hint to reduce memory.
-print('Most common words', count[:5])
-print('Sample data', data[:10], [reverse_dictionary[i] for i in data[:10]])
+print("Most common words", count[:5])
+print("Sample data", data[:10], [reverse_dictionary[i] for i in data[:10]])
 
 data_index = 0
 
@@ -59,10 +66,12 @@ def generate_batch(batch_size, num_skips, skip_window):
     batch = np.ndarray(shape=(batch_size), dtype=np.int32)
     labels = np.ndarray(shape=(batch_size, 1), dtype=np.int32)
     span = 2 * skip_window + 1  # [ skip_window target skip_window ]
-    buffer = collections.deque(maxlen=span)  # pylint: disable=redefined-builtin
+    buffer = collections.deque(
+        maxlen=span
+    )  # pylint: disable=redefined-builtin
     if data_index + span > len(data):
         data_index = 0
-    buffer.extend(data[data_index:data_index + span])
+    buffer.extend(data[data_index : data_index + span])
     data_index += span
     for i in range(batch_size // num_skips):
         context_words = [w for w in range(span) if w != skip_window]
@@ -83,8 +92,13 @@ def generate_batch(batch_size, num_skips, skip_window):
 
 batch, labels = generate_batch(batch_size=32, num_skips=2, skip_window=1)
 for i in range(8):
-    print(batch[i], reverse_dictionary[batch[i]], '->', labels[i, 0],
-                reverse_dictionary[labels[i, 0]])
+    print(
+        batch[i],
+        reverse_dictionary[batch[i]],
+        "->",
+        labels[i, 0],
+        reverse_dictionary[labels[i, 0]],
+    )
 
 # Step 4: Build and train a skip-gram model.
 
@@ -107,25 +121,28 @@ graph = tf.Graph()
 with graph.as_default():
 
     # Input data.
-    with tf.name_scope('inputs'):
+    with tf.name_scope("inputs"):
         train_inputs = tf.placeholder(tf.int32, shape=[batch_size])
         train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
         valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
 
     # Ops and variables pinned to the CPU because of missing GPU implementation
     # Look up embeddings for inputs.
-    with tf.name_scope('embeddings'):
+    with tf.name_scope("embeddings"):
         embeddings = tf.Variable(
-                tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0))
+            tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0)
+        )
         embed = tf.nn.embedding_lookup(embeddings, train_inputs)
 
     # Construct the variables for the NCE loss
-    with tf.name_scope('weights'):
+    with tf.name_scope("weights"):
         nce_weights = tf.Variable(
-                tf.truncated_normal(
-                        [vocabulary_size, embedding_size],
-                        stddev=1.0 / math.sqrt(embedding_size)))
-    with tf.name_scope('biases'):
+            tf.truncated_normal(
+                [vocabulary_size, embedding_size],
+                stddev=1.0 / math.sqrt(embedding_size),
+            )
+        )
+    with tf.name_scope("biases"):
         nce_biases = tf.Variable(tf.zeros([vocabulary_size]))
 
     # Compute the average NCE loss for the batch.
@@ -133,29 +150,34 @@ with graph.as_default():
     # time we evaluate the loss.
     # Explanation of the meaning of NCE loss:
     #   http://mccormickml.com/2016/04/19/word2vec-tutorial-the-skip-gram-model/
-    with tf.name_scope('loss'):
+    with tf.name_scope("loss"):
         loss = tf.reduce_mean(
-                tf.nn.nce_loss(
-                        weights=nce_weights,
-                        biases=nce_biases,
-                        labels=train_labels,
-                        inputs=embed,
-                        num_sampled=num_sampled,
-                        num_classes=vocabulary_size))
+            tf.nn.nce_loss(
+                weights=nce_weights,
+                biases=nce_biases,
+                labels=train_labels,
+                inputs=embed,
+                num_sampled=num_sampled,
+                num_classes=vocabulary_size,
+            )
+        )
 
     # Add the loss value as a scalar to summary.
-    tf.summary.scalar('loss', loss)
+    tf.summary.scalar("loss", loss)
 
     # Construct the SGD optimizer using a learning rate of 1.0.
-    with tf.name_scope('optimizer'):
+    with tf.name_scope("optimizer"):
         optimizer = tf.train.GradientDescentOptimizer(0.2).minimize(loss)
 
     # Compute the cosine similarity between minibatch examples and all embeddings.
     norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keepdims=True))
     normalized_embeddings = embeddings / norm
-    valid_embeddings = tf.nn.embedding_lookup(normalized_embeddings, valid_dataset)
+    valid_embeddings = tf.nn.embedding_lookup(
+        normalized_embeddings, valid_dataset
+    )
     similarity = tf.matmul(
-            valid_embeddings, normalized_embeddings, transpose_b=True)
+        valid_embeddings, normalized_embeddings, transpose_b=True
+    )
 
     # Merge all summaries.
     merged = tf.summary.merge_all()
@@ -175,11 +197,13 @@ with tf.Session(graph=graph) as session:
 
     # We must initialize all variables before we use them.
     init.run()
-    print('Initialized')
+    print("Initialized")
 
     average_loss = 0
     for step in xrange(num_steps):
-        batch_inputs, batch_labels = generate_batch(batch_size, num_skips, skip_window)
+        batch_inputs, batch_labels = generate_batch(
+            batch_size, num_skips, skip_window
+        )
         feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
 
         # Define metadata variable.
@@ -190,22 +214,23 @@ with tf.Session(graph=graph) as session:
         # Also, evaluate the merged op to get all summaries from the returned "summary" variable.
         # Feed metadata variable to session for visualizing the graph in TensorBoard.
         _, summary, loss_val = session.run(
-                [optimizer, merged, loss],
-                feed_dict=feed_dict,
-                run_metadata=run_metadata)
+            [optimizer, merged, loss],
+            feed_dict=feed_dict,
+            run_metadata=run_metadata,
+        )
         average_loss += loss_val
 
         # Add returned summaries to writer in each step.
         writer.add_summary(summary, step)
         # Add metadata to visualize the graph for the last run.
         if step == (num_steps - 1):
-            writer.add_run_metadata(run_metadata, 'step%d' % step)
+            writer.add_run_metadata(run_metadata, "step%d" % step)
 
         if step % 2000 == 0:
             if step > 0:
                 average_loss /= 2000
             # The average loss is an estimate of the loss over the last 2000 batches.
-            print('Average loss at step ', step, ': ', average_loss)
+            print("Average loss at step ", step, ": ", average_loss)
             average_loss = 0
 
         # Note that this is expensive (~20% slowdown if computed every 500 steps)
@@ -214,27 +239,27 @@ with tf.Session(graph=graph) as session:
             for i in xrange(valid_size):
                 valid_word = reverse_dictionary[valid_examples[i]]
                 top_k = 8  # number of nearest neighbors
-                nearest = (-sim[i, :]).argsort()[1:top_k + 1]
-                log_str = 'Nearest to %s:' % valid_word
+                nearest = (-sim[i, :]).argsort()[1 : top_k + 1]
+                log_str = "Nearest to %s:" % valid_word
                 for k in xrange(top_k):
                     close_word = reverse_dictionary[nearest[k]]
-                    log_str = '%s %s,' % (log_str, close_word)
+                    log_str = "%s %s," % (log_str, close_word)
                 print(log_str)
     final_embeddings = normalized_embeddings.eval()
 
     # Write corresponding labels for the embeddings.
-    with open(log_dir + '/metadata.tsv', 'w') as f:
+    with open(log_dir + "/metadata.tsv", "w") as f:
         for i in xrange(vocabulary_size):
-            f.write(reverse_dictionary[i] + '\n')
+            f.write(reverse_dictionary[i] + "\n")
 
     # Save the model for checkpoints.
-    saver.save(session, os.path.join(log_dir, 'model.ckpt'))
+    saver.save(session, os.path.join(log_dir, "model.ckpt"))
 
     # Create a configuration for visualizing embeddings with the labels in TensorBoard.
     config = projector.ProjectorConfig()
     embedding_conf = config.embeddings.add()
     embedding_conf.tensor_name = embeddings.name
-    embedding_conf.metadata_path = os.path.join(log_dir, 'metadata.tsv')
+    embedding_conf.metadata_path = os.path.join(log_dir, "metadata.tsv")
     projector.visualize_embeddings(writer, config)
 
 writer.close()
@@ -245,25 +270,29 @@ writer.close()
 # pylint: disable=missing-docstring
 # Function to draw visualization of distance between embeddings.
 
+
 def plot_with_labels(low_dim_embs, labels):
-    assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
+    assert low_dim_embs.shape[0] >= len(labels), "More labels than embeddings"
     plt.figure(figsize=(25, 25))  # in inches
     for i, label in enumerate(labels):
         x, y = low_dim_embs[i, :]
         plt.scatter(x, y)
         plt.annotate(
-                label,
-                xy=(x, y),
-                xytext=(5, 2),
-                textcoords='offset points',
-                ha='right',
-                va='bottom')
+            label,
+            xy=(x, y),
+            xytext=(5, 2),
+            textcoords="offset points",
+            ha="right",
+            va="bottom",
+        )
 
     plt.show()
 
-final_embeddings = pickle.load(open('sheldon/pickle_files/embedding','rb'))
+
+final_embeddings = pickle.load(open("sheldon/pickle_files/embedding", "rb"))
 tsne = TSNE(
-        perplexity=30, n_components=2, init='pca', n_iter=5000, method='exact')
+    perplexity=30, n_components=2, init="pca", n_iter=5000, method="exact"
+)
 plot_only = 200
 idx = np.random.randint(vocabulary_size, size=plot_only)
 sampled_embeddings = final_embeddings[idx, :]
@@ -274,22 +303,26 @@ plot_with_labels(low_dim_embs, labels)
 from mpl_toolkits.mplot3d.proj3d import proj_transform
 from matplotlib.text import Annotation
 
+
 class Annotation3D(Annotation):
-    '''Annotate the point xyz with text s'''
+    """Annotate the point xyz with text s"""
+
     def __init__(self, s, xyz, *args, **kwargs):
-        Annotation.__init__(self,s, xy=(0,0), *args, **kwargs)
-        self._verts3d = xyz        
+        Annotation.__init__(self, s, xy=(0, 0), *args, **kwargs)
+        self._verts3d = xyz
 
     def draw(self, renderer):
         xs3d, ys3d, zs3d = self._verts3d
         xs, ys, zs = proj_transform(xs3d, ys3d, zs3d, renderer.M)
-        self.xy=(xs,ys)
+        self.xy = (xs, ys)
         Annotation.draw(self, renderer)
 
+
 def annotate3D(ax, s, *args, **kwargs):
-    '''add anotation text s to to Axes3d ax'''
+    """add anotation text s to to Axes3d ax"""
     tag = Annotation3D(s, *args, **kwargs)
     ax.add_artist(tag)
+
 
 from matplotlib import animation
 from mpl_toolkits.mplot3d import Axes3D
@@ -301,18 +334,43 @@ xyzn = zip(xx, yy, zz)
 fig = plt.figure(dpi=120)
 ax = Axes3D(fig)
 
+
 def init():
-    ax.scatter(xx, yy, zz, marker='o', c=zz, s=20, alpha=0.6)
-    for j, x_, y_, z_ in zip(labels, xx, yy, zz): 
-        annotate3D(ax, s=j, xyz=(x_, y_, z_), fontsize=5, xytext=(-3,3), textcoords='offset points', ha='right',va='bottom')
-    return fig,
+    ax.scatter(xx, yy, zz, marker="o", c=zz, s=20, alpha=0.6)
+    for j, x_, y_, z_ in zip(labels, xx, yy, zz):
+        annotate3D(
+            ax,
+            s=j,
+            xyz=(x_, y_, z_),
+            fontsize=5,
+            xytext=(-3, 3),
+            textcoords="offset points",
+            ha="right",
+            va="bottom",
+        )
+    return (fig,)
+
 
 def animate(i):
-    ax.view_init(elev=10., azim=i)
-    return fig,
+    ax.view_init(elev=10.0, azim=i)
+    return (fig,)
+
 
 # Animate
-anim = animation.FuncAnimation(fig, animate, init_func=init,frames=360, interval=20, repeat=True, blit=True)
-anim.save('basic_animation.gif', writer='imagemagick', fps=30, extra_args=['-vcodec', 'libx264'])
+anim = animation.FuncAnimation(
+    fig,
+    animate,
+    init_func=init,
+    frames=360,
+    interval=20,
+    repeat=True,
+    blit=True,
+)
+anim.save(
+    "basic_animation.gif",
+    writer="imagemagick",
+    fps=30,
+    extra_args=["-vcodec", "libx264"],
+)
 
 plt.show()

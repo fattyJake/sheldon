@@ -20,7 +20,7 @@ def care_plan(ccda):
 
     parse_date = documents.parse_date
     data = []
-    care_plan = ccda.section('care_plan')
+    care_plan = ccda.section("care_plan")
 
     for entry in care_plan.entries():
 
@@ -30,15 +30,15 @@ def care_plan(ccda):
         code_system_name = None
 
         # Plan of care encounters, which have no other details
-        el = entry.tag('code')
+        el = entry.tag("code")
 
-        name = el.attr('displayName')
-        code = el.attr('code')
-        code_system = el.attr('codeSystem')
-        code_system_name = el.attr('codeSystemName')
+        name = el.attr("displayName")
+        code = el.attr("code")
+        code_system = el.attr("codeSystem")
+        code_system_name = el.attr("codeSystemName")
 
-        date = parse_date(entry.tag('effectiveTime').attr('value'))
-        text = core.strip_whitespace(entry.tag('text').val())
+        date = parse_date(entry.tag("effectiveTime").attr("value"))
+        text = core.strip_whitespace(entry.tag("text").val())
 
         data.append(
             wrappers.ObjectWrapper(
@@ -47,7 +47,8 @@ def care_plan(ccda):
                 code=code,
                 code_system=code_system,
                 code_system_name=code_system_name,
-                date=date
-        ))
+                date=date,
+            )
+        )
 
     return wrappers.ListWrapper(data)

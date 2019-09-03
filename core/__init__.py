@@ -22,9 +22,10 @@ def json():
 
 
 def parse_data(source):
-#    source_stripped = strip_whitespace(source)
+    #    source_stripped = strip_whitespace(source)
 
-#    if source_stripped.startswith('<?xml'):
+    #    if source_stripped.startswith('<?xml'):
     return xml.parse(source)
+
 
 strip_whitespace = _core.strip_whitespace

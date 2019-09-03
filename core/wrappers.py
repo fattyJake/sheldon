@@ -10,6 +10,7 @@ import datetime
 import json
 import re
 
+
 class FixedOffset(datetime.tzinfo):
     """Fixed offset in minutes east from UTC."""
 
@@ -19,18 +20,18 @@ class FixedOffset(datetime.tzinfo):
 
     @classmethod
     def UTC(cls):
-        return cls(0, 'UTC')
+        return cls(0, "UTC")
 
     @classmethod
     def from_string(cls, tz):
         stripped = str(tz).strip()
 
-        if not stripped or 'Z' == stripped:
+        if not stripped or "Z" == stripped:
             return cls.UTC()
 
         hour = int(stripped[1:3])
-        minutes = hour*60 + int(stripped[3:5])
-        if stripped[0] == '-':
+        minutes = hour * 60 + int(stripped[3:5])
+        if stripped[0] == "-":
             minutes *= -1
 
         return cls(minutes, stripped)
@@ -48,9 +49,11 @@ class FixedOffset(datetime.tzinfo):
 class JSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime.datetime):
-            try: utc = (o - o.utcoffset()).replace(tzinfo=FixedOffset.UTC())
-            except: utc = o.replace(tzinfo=None)
-            return utc.isoformat().replace('+00:00', 'Z')
+            try:
+                utc = (o - o.utcoffset()).replace(tzinfo=FixedOffset.UTC())
+            except:
+                utc = o.replace(tzinfo=None)
+            return utc.isoformat().replace("+00:00", "Z")
         elif isinstance(o, datetime.date):
             return o.strftime("%m/%d/%Y")
         elif isinstance(o, ObjectWrapper):
@@ -63,6 +66,7 @@ class ObjectWrapper(object):
     """
     Object Wrapper to append attributes and dump all data into JSON format.
     """
+
     def __init__(self, **kwargs):
         for keyword, value in kwargs.items():
             setattr(self, keyword, value)
@@ -82,6 +86,7 @@ class ListWrapper(list):
     """
     List Wrapper all ObjectWapper into JSON format.
     """
+
     def json(self):
         return json.dumps(self, cls=JSONEncoder)
 
@@ -92,8 +97,9 @@ def parse_number(s):
     """
     if not s:
         return None
-    s = re.sub('[^0-9]','', s)
+    s = re.sub("[^0-9]", "", s)
     if s:
         value = float(s)
         return int(value) if value == int(value) else value
-    else: return None
+    else:
+        return None

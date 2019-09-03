@@ -24,87 +24,88 @@ def section(ccda, name):
 
     entries = documents.entries
 
-    if 'document' == name:
-        return ccda.loinc_section('34133-9')
-    if 'allergies' == name:
-        el = ccda.loinc_section('48765-2')
+    if "document" == name:
+        return ccda.loinc_section("34133-9")
+    if "allergies" == name:
+        el = ccda.loinc_section("48765-2")
         el.entries = entries
         return el
-    if 'care_plan' == name:
-        el = ccda.loinc_section('18776-5')
+    if "care_plan" == name:
+        el = ccda.loinc_section("18776-5")
         el.entries = entries
         return el
-    if 'chief_complaint' == name:
-        el = ccda.loinc_section('46239-0')
+    if "chief_complaint" == name:
+        el = ccda.loinc_section("46239-0")
         # no entries in Chief Complaint
         return el
-    if 'demographics' == name:
-        return ccda.loinc_section('34133-9')
-    if 'diagnosis' == name:
-        return ccda.loinc_section('51848-0')
-    if 'encounters' == name:
-        el = ccda.loinc_section('46240-8')
+    if "demographics" == name:
+        return ccda.loinc_section("34133-9")
+    if "diagnosis" == name:
+        return ccda.loinc_section("51848-0")
+    if "encounters" == name:
+        el = ccda.loinc_section("46240-8")
         el.entries = entries
         return el
-    if 'functional_statuses' == name:
-        el = ccda.loinc_section('47420-5')
+    if "functional_statuses" == name:
+        el = ccda.loinc_section("47420-5")
         el.entries = entries
         return el
-    if 'family_history' == name:
-        el = ccda.loinc_section('10157-6')
+    if "family_history" == name:
+        el = ccda.loinc_section("10157-6")
         el.entries = entries
         return el
-    if 'history_of_present_illness' == name:
-        el = ccda.loinc_section('11348-0')
+    if "history_of_present_illness" == name:
+        el = ccda.loinc_section("11348-0")
         return el
-    if 'immunizations' == name:
-        el = ccda.loinc_section('11369-6')
+    if "immunizations" == name:
+        el = ccda.loinc_section("11369-6")
         el.entries = entries
         return el
-    if 'instructions' == name:
-        el = ccda.loinc_section('69730-0')
+    if "instructions" == name:
+        el = ccda.loinc_section("69730-0")
         el.entries = entries
         return el
-    if 'results' == name:
-        el = ccda.loinc_section('30954-2')
+    if "results" == name:
+        el = ccda.loinc_section("30954-2")
         el.entries = entries
         return el
-    if 'medical_equipment' == name:
-        el = ccda.loinc_section('46264-8')
+    if "medical_equipment" == name:
+        el = ccda.loinc_section("46264-8")
         el.entries = entries
         return el
-    if 'medications' == name:
-        el = ccda.loinc_section('10160-0')
+    if "medications" == name:
+        el = ccda.loinc_section("10160-0")
         el.entries = entries
         return el
-    if 'problems' == name:
-        el = ccda.loinc_section('11450-4')
+    if "problems" == name:
+        el = ccda.loinc_section("11450-4")
         el.entries = entries
         return el
-    if 'procedures' == name:
-        el = ccda.loinc_section('47519-4')
+    if "procedures" == name:
+        el = ccda.loinc_section("47519-4")
         el.entries = entries
         return el
-    if 'physical_exam' == name:
-        el = ccda.loinc_section('29545-1')
+    if "physical_exam" == name:
+        el = ccda.loinc_section("29545-1")
         return el
-    if 'social_history' == name:
-        el = ccda.loinc_section('29762-2')
+    if "social_history" == name:
+        el = ccda.loinc_section("29762-2")
         el.entries = entries
         return el
-    if 'system_review' == name:
-        el = ccda.loinc_section('10187-3')
+    if "system_review" == name:
+        el = ccda.loinc_section("10187-3")
         return el
-    if 'vitals' == name:
-        el = ccda.loinc_section('8716-3')
+    if "vitals" == name:
+        el = ccda.loinc_section("8716-3")
         el.entries = entries
         return el
-    if 'advance_directives' == name:
-        el = ccda.loinc_section('42348-3')
+    if "advance_directives" == name:
+        el = ccda.loinc_section("42348-3")
         el.entries = entries
         return el
 
     return None
+
 
 #    if 'document' == name:
 #        return ccda.template('2.16.840.1.113883.10.20.22.1.1')

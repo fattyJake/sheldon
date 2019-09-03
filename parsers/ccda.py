@@ -37,13 +37,15 @@ def run(ccda):
     data.advance_directives = advance_directives(ccda)
     data.allergies = allergies(ccda)
     data.care_plan = care_plan(ccda)
-    data.chief_complaint = free_text(ccda, 'chief_complaint')
-    data.diagnosis = free_text(ccda, 'diagnosis')
+    data.chief_complaint = free_text(ccda, "chief_complaint")
+    data.diagnosis = free_text(ccda, "diagnosis")
     data.demographics = demographics(ccda)
     data.encounters = encounters(ccda)
     data.functional_statuses = functional_statuses(ccda)
     data.family_history = family_history(ccda)
-    data.history_of_present_illness = free_text(ccda, 'history_of_present_illness')
+    data.history_of_present_illness = free_text(
+        ccda, "history_of_present_illness"
+    )
     data.immunizations = immunizations(ccda).administered
     data.immunization_declines = immunizations(ccda).declined
     data.instructions = instructions(ccda)
@@ -52,9 +54,9 @@ def run(ccda):
     data.medications = medications(ccda)
     data.problems = problems(ccda)
     data.procedures = procedures(ccda)
-    data.physical_exam = free_text(ccda, 'physical_exam')
+    data.physical_exam = free_text(ccda, "physical_exam")
     data.social_history = social_history(ccda)
-    data.system_review = free_text(ccda, 'system_review')
+    data.system_review = free_text(ccda, "system_review")
     data.vitals = vitals(ccda)
 
     return data

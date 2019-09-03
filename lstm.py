@@ -11,6 +11,7 @@ import tensorflow as tf
 from datetime import datetime
 import numpy as np
 
+
 class BiLSTM(object):
     """
     A Bi-LSTM for EHR classification
@@ -66,9 +67,20 @@ class BiLSTM(object):
     """
 
     def __init__(
-        self, max_sequence_length, hidden_size, num_classes, variable_size, embedding_size,
-        learning_rate, decay_steps, decay_rate, dropout_keep_prob, l2_reg_lambda=0.0, objective='ce',
-        initializer=tf.random_normal_initializer(stddev=0.1)):
+        self,
+        max_sequence_length,
+        hidden_size,
+        num_classes,
+        variable_size,
+        embedding_size,
+        learning_rate,
+        decay_steps,
+        decay_rate,
+        dropout_keep_prob,
+        l2_reg_lambda=0.0,
+        objective="ce",
+        initializer=tf.random_normal_initializer(stddev=0.1),
+    ):
 
         """init all hyperparameter here"""
         tf.reset_default_graph()
@@ -86,85 +98,176 @@ class BiLSTM(object):
 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
-        self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
+        self.epoch_increment = tf.assign(
+            self.epoch_step, tf.add(self.epoch_step, tf.constant(1))
+        )
         self.decay_steps, self.decay_rate = decay_steps, decay_rate
 
         # add placeholder (X, quantity, time and label)
-        self.input_x = tf.placeholder(tf.int32, [None, self.max_sequence_length], name="input_x")  # X [instance_size, num_bucket]
-        self.input_q = tf.placeholder(tf.float32, [None, self.max_sequence_length], name="input_q")  # Q [instance_size, num_bucket]
-        self.input_y = tf.placeholder(tf.int8, [None, self.num_classes], name="input_y")  # y [instance_size, num_classes]
+        self.input_x = tf.placeholder(
+            tf.int32, [None, self.max_sequence_length], name="input_x"
+        )  # X [instance_size, num_bucket]
+        self.input_q = tf.placeholder(
+            tf.float32, [None, self.max_sequence_length], name="input_q"
+        )  # Q [instance_size, num_bucket]
+        self.input_y = tf.placeholder(
+            tf.int8, [None, self.num_classes], name="input_y"
+        )  # y [instance_size, num_classes]
 
         """define all weights here"""
-        with tf.name_scope("embedding"), tf.device('/gpu:0'): # embedding matrix
-            embedding_matrix = tf.random_normal((self.variable_size, self.embedding_size), stddev=0.1)
-            embedding_matrix = tf.concat([embedding_matrix, tf.zeros((1, self.embedding_size))], axis=0)
-            self.Embedding = tf.Variable(embedding_matrix, trainable=True, dtype=tf.float32, name='embedding')
-            
-            self.W_projection = tf.get_variable("W_projection", shape=[self.hidden_size*2, self.num_classes],initializer=self.initializer) #[embedding_size,label_size]
-            self.b_projection = tf.get_variable("b_projection", shape=[self.num_classes])       #[label_size]
+        with tf.name_scope("embedding"), tf.device(
+            "/gpu:0"
+        ):  # embedding matrix
+            embedding_matrix = tf.random_normal(
+                (self.variable_size, self.embedding_size), stddev=0.1
+            )
+            embedding_matrix = tf.concat(
+                [embedding_matrix, tf.zeros((1, self.embedding_size))], axis=0
+            )
+            self.Embedding = tf.Variable(
+                embedding_matrix,
+                trainable=True,
+                dtype=tf.float32,
+                name="embedding",
+            )
+
+            self.W_projection = tf.get_variable(
+                "W_projection",
+                shape=[self.hidden_size * 2, self.num_classes],
+                initializer=self.initializer,
+            )  # [embedding_size,label_size]
+            self.b_projection = tf.get_variable(
+                "b_projection", shape=[self.num_classes]
+            )  # [label_size]
 
         # main computation graph here: 1. embeddding layer, 2.Bi-LSTM layer, 3.concat, 4.FC layer 5.softmax
-        #1.get emebedding of words in the sentence
+        # 1.get emebedding of words in the sentence
         embedded_X = tf.nn.embedding_lookup(self.Embedding, self.input_x)
         # concatenate quantity
-        embedded_X = tf.concat([embedded_X, tf.expand_dims(self.input_q, axis=2)], axis=2)
-        self.input = tf.concat(values=embedded_X, axis=2) #shape: [batch_size, max_sequence_length, concate_embedding_size]
+        embedded_X = tf.concat(
+            [embedded_X, tf.expand_dims(self.input_q, axis=2)], axis=2
+        )
+        self.input = tf.concat(
+            values=embedded_X, axis=2
+        )  # shape: [batch_size, max_sequence_length, concate_embedding_size]
 
-        #2. Bi-LSTM layer
+        # 2. Bi-LSTM layer
         # define lstm cess:get lstm cell output
-        lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size) #forward direction cell
-        lstm_bw_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size) #backward direction cell
+        lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(
+            self.hidden_size
+        )  # forward direction cell
+        lstm_bw_cell = tf.contrib.rnn.BasicLSTMCell(
+            self.hidden_size
+        )  # backward direction cell
         if self.dropout_keep_prob is not None:
-            lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(lstm_fw_cell, output_keep_prob=self.dropout_keep_prob)
-            lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(lstm_bw_cell, output_keep_prob=self.dropout_keep_prob)
+            lstm_fw_cell = tf.contrib.rnn.DropoutWrapper(
+                lstm_fw_cell, output_keep_prob=self.dropout_keep_prob
+            )
+            lstm_bw_cell = tf.contrib.rnn.DropoutWrapper(
+                lstm_bw_cell, output_keep_prob=self.dropout_keep_prob
+            )
         # bidirectional_dynamic_rnn: input: [batch_size, max_time, input_size]
         #                            output: A tuple (outputs, output_states)
         #                                    where:outputs: A tuple (output_fw, output_bw) containing the forward and the backward rnn output `Tensor`.
-        outputs, _ = tf.nn.bidirectional_dynamic_rnn(lstm_fw_cell, lstm_bw_cell, self.input, dtype=tf.float32) #[batch_size,sequence_length,hidden_size] #creates a dynamic bidirectional recurrent neural network
-        output_rnn = tf.concat(outputs, axis=2) #[batch_size,sequence_length,hidden_size*2]
+        outputs, _ = tf.nn.bidirectional_dynamic_rnn(
+            lstm_fw_cell, lstm_bw_cell, self.input, dtype=tf.float32
+        )  # [batch_size,sequence_length,hidden_size] #creates a dynamic bidirectional recurrent neural network
+        output_rnn = tf.concat(
+            outputs, axis=2
+        )  # [batch_size,sequence_length,hidden_size*2]
 
-        #3. Second LSTM layer
-        rnn_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size*2)
+        # 3. Second LSTM layer
+        rnn_cell = tf.contrib.rnn.BasicLSTMCell(self.hidden_size * 2)
         if self.dropout_keep_prob is not None:
-            rnn_cell = tf.contrib.rnn.DropoutWrapper(rnn_cell, output_keep_prob=self.dropout_keep_prob)
-        _, final_state_c_h = tf.nn.dynamic_rnn(rnn_cell, output_rnn, dtype=tf.float32)
+            rnn_cell = tf.contrib.rnn.DropoutWrapper(
+                rnn_cell, output_keep_prob=self.dropout_keep_prob
+            )
+        _, final_state_c_h = tf.nn.dynamic_rnn(
+            rnn_cell, output_rnn, dtype=tf.float32
+        )
         final_state = final_state_c_h[1]
 
-        #4 .FC layer
-        self.output_rnn_last = tf.layers.dense(final_state, self.hidden_size*2, activation=tf.nn.tanh)
+        # 4 .FC layer
+        self.output_rnn_last = tf.layers.dense(
+            final_state, self.hidden_size * 2, activation=tf.nn.tanh
+        )
 
-        #5. logits(use linear layer)
-        with tf.name_scope("output"): #inputs: A `Tensor` of shape `[batch_size, dim]`.  The forward activations of the input network.
-            self.logits = tf.nn.xw_plus_b(self.output_rnn_last, self.W_projection, self.b_projection, name="scores")
+        # 5. logits(use linear layer)
+        with tf.name_scope(
+            "output"
+        ):  # inputs: A `Tensor` of shape `[batch_size, dim]`.  The forward activations of the input network.
+            self.logits = tf.nn.xw_plus_b(
+                self.output_rnn_last,
+                self.W_projection,
+                self.b_projection,
+                name="scores",
+            )
             self.probs = tf.sigmoid(self.logits, name="probs")
 
-        assert objective in ['ce', 'auc'], 'AttributeError: objective only acccept "ce" or "auc", got {}'.format(str(objective))
-        if objective == 'ce':  self.loss_val = self._loss(self.l2_reg_lambda)
-        if objective == 'auc': self.loss_val = self._loss_roc_auc(self.l2_reg_lambda)
+        assert objective in [
+            "ce",
+            "auc",
+        ], 'AttributeError: objective only acccept "ce" or "auc", got {}'.format(
+            str(objective)
+        )
+        if objective == "ce":
+            self.loss_val = self._loss(self.l2_reg_lambda)
+        if objective == "auc":
+            self.loss_val = self._loss_roc_auc(self.l2_reg_lambda)
         self.train_op = self._train()
-        self.predictions = tf.argmax(self.logits, axis=1, name="predictions")  # shape:[None,]
+        self.predictions = tf.argmax(
+            self.logits, axis=1, name="predictions"
+        )  # shape:[None,]
 
         # performance
         with tf.name_scope("performance"):
-            _, self.auc = tf.metrics.auc(self.input_y, self.probs, curve="ROC", name="auc")
-            correct_prediction = tf.equal(tf.cast(self.predictions, tf.int8), self.input_y) #tf.argmax(self.logits, 1)-->[batch_size]
-            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accuracy") # shape=()   
+            _, self.auc = tf.metrics.auc(
+                self.input_y, self.probs, curve="ROC", name="auc"
+            )
+            correct_prediction = tf.equal(
+                tf.cast(self.predictions, tf.int8), self.input_y
+            )  # tf.argmax(self.logits, 1)-->[batch_size]
+            self.accuracy = tf.reduce_mean(
+                tf.cast(correct_prediction, tf.float32), name="accuracy"
+            )  # shape=()
 
     def _train(self):
         """
         based on the loss, use Adam to update parameter
         """
-        learning_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, self.decay_steps,self.decay_rate, staircase=True)
-        train_op = tf.contrib.layers.optimize_loss(self.loss_val, global_step=self.global_step, learning_rate=learning_rate, optimizer="Adam")
+        learning_rate = tf.train.exponential_decay(
+            self.learning_rate,
+            self.global_step,
+            self.decay_steps,
+            self.decay_rate,
+            staircase=True,
+        )
+        train_op = tf.contrib.layers.optimize_loss(
+            self.loss_val,
+            global_step=self.global_step,
+            learning_rate=learning_rate,
+            optimizer="Adam",
+        )
         return train_op
 
     def _loss(self, l2_reg_lambda):
         with tf.name_scope("loss"):
-            #input: `logits` and `labels` must have the same shape `[batch_size, num_classes]`
-            #output: A 1-D `Tensor` of length `batch_size` of the same type as `logits` with the softmax cross entropy loss.
-            losses = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.input_y, logits=self.logits)
+            # input: `logits` and `labels` must have the same shape `[batch_size, num_classes]`
+            # output: A 1-D `Tensor` of length `batch_size` of the same type as `logits` with the softmax cross entropy loss.
+            losses = tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels=self.input_y, logits=self.logits
+            )
             loss = tf.reduce_mean(losses)
-            l2_losses = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_reg_lambda
+            l2_losses = (
+                tf.add_n(
+                    [
+                        tf.nn.l2_loss(v)
+                        for v in tf.trainable_variables()
+                        if "bias" not in v.name
+                    ]
+                )
+                * l2_reg_lambda
+            )
             loss = loss + l2_losses
         return loss
 
@@ -185,16 +288,36 @@ class BiLSTM(object):
 
         # original paper suggests performance is robust to exact parameter choice
         gamma = 0.2
-        p     = 3
+        p = 3
 
         difference = tf.zeros_like(pos * neg) + pos - neg - gamma
         masked = tf.boolean_mask(difference, difference < 0.0)
         loss = tf.reduce_sum(tf.pow(-masked, p))
-        l2_losses = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_reg_lambda
+        l2_losses = (
+            tf.add_n(
+                [
+                    tf.nn.l2_loss(v)
+                    for v in tf.trainable_variables()
+                    if "bias" not in v.name
+                ]
+            )
+            * l2_reg_lambda
+        )
         loss = loss + l2_losses
         return loss
 
-def train_rnn(model, x_train, q_train, y_train, dev_sample_percentage, num_epochs, batch_size, evaluate_every, model_path):
+
+def train_rnn(
+    model,
+    x_train,
+    q_train,
+    y_train,
+    dev_sample_percentage,
+    num_epochs,
+    batch_size,
+    evaluate_every,
+    model_path,
+):
     """
     Training module for BiLSTM objectives
     
@@ -258,8 +381,8 @@ def train_rnn(model, x_train, q_train, y_train, dev_sample_percentage, num_epoch
     with graph.as_default():
 
         # configurate TensorFlow session, enable GPU accelerated if possible
-        config=tf.ConfigProto()
-        config.gpu_options.allow_growth=True
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
         with tf.Session(config=config) as sess:
             saver = tf.train.Saver()
 
@@ -267,43 +390,65 @@ def train_rnn(model, x_train, q_train, y_train, dev_sample_percentage, num_epoch
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
-            print('start time:', datetime.now())
+            print("start time:", datetime.now())
             # create model root path if not exists
-            if not os.path.exists(model_path): os.mkdir(model_path)
+            if not os.path.exists(model_path):
+                os.mkdir(model_path)
 
             # get current epoch
             curr_epoch = sess.run(model.epoch_step)
             for epoch in range(curr_epoch, num_epochs):
-                print('Epoch', epoch+1, '...')
+                print("Epoch", epoch + 1, "...")
                 counter = 0
 
                 # loop batch training
-                for start, end in zip(range(0, training_size, batch_size), range(batch_size, training_size, batch_size)):
+                for start, end in zip(
+                    range(0, training_size, batch_size),
+                    range(batch_size, training_size, batch_size),
+                ):
                     epoch_x = x_train[start:end]
                     epoch_q = q_train[start:end]
                     epoch_y = y_train[start:end]
 
                     # create model inputs
-                    feed_dict = {model.input_x: epoch_x, model.input_q: epoch_q, model.input_y: epoch_y}
+                    feed_dict = {
+                        model.input_x: epoch_x,
+                        model.input_q: epoch_q,
+                        model.input_y: epoch_y,
+                    }
 
                     # train one step
-                    curr_loss, _ = sess.run([model.loss_val, model.train_op], feed_dict)
-                    counter = counter+1
+                    curr_loss, _ = sess.run(
+                        [model.loss_val, model.train_op], feed_dict
+                    )
+                    counter = counter + 1
 
                     # evaluation
                     if counter % evaluate_every == 0:
                         train_accu = model.auc.eval(feed_dict)
-                        dev_accu = _do_eval(sess, model, x_dev, q_dev, y_dev, batch_size)
-                        print('Step:', counter, '\tLoss:', curr_loss, '\tTraining accuracy:', train_accu, '\tDevelopment accuracy:', dev_accu)
+                        dev_accu = _do_eval(
+                            sess, model, x_dev, q_dev, y_dev, batch_size
+                        )
+                        print(
+                            "Step:",
+                            counter,
+                            "\tLoss:",
+                            curr_loss,
+                            "\tTraining accuracy:",
+                            train_accu,
+                            "\tDevelopment accuracy:",
+                            dev_accu,
+                        )
                 sess.run(model.epoch_increment)
 
                 # write model into disk at the end of each epoch
-                saver.save(sess, model_path+'/model')
-                print('='*50)
+                saver.save(sess, model_path + "/model")
+                print("=" * 50)
 
-            print('End time:', datetime.now())
+            print("End time:", datetime.now())
 
-def test_rnn(model_path, prob_norm='softmax', just_graph=False, **kwargs):
+
+def test_rnn(model_path, prob_norm="softmax", just_graph=False, **kwargs):
     """
     Testing module for BiLSTM models
     
@@ -386,35 +531,50 @@ def test_rnn(model_path, prob_norm='softmax', just_graph=False, **kwargs):
     sess.as_default()
 
     # Recreate the network graph. At this step only graph is created.
-    saver = tf.train.import_meta_graph(os.path.join(model_path.rstrip('/'), 'model.meta'))
+    saver = tf.train.import_meta_graph(
+        os.path.join(model_path.rstrip("/"), "model.meta")
+    )
     saver.restore(sess, tf.train.latest_checkpoint(model_path))
     graph = tf.get_default_graph()
 
     # restore graph names for predictions
     y_score = graph.get_tensor_by_name("output/scores:0")
-    assert prob_norm in ['softmax', 'sigmoid'], 'AttributeError: prob_norm only acccept "softmax" or "sigmoid", got {}'.format(str(prob_norm))
-    if prob_norm == 'softmax': y_pred = tf.nn.softmax(y_score)
-    if prob_norm == 'sigmoid': y_pred = tf.sigmoid(y_score)
+    assert prob_norm in [
+        "softmax",
+        "sigmoid",
+    ], 'AttributeError: prob_norm only acccept "softmax" or "sigmoid", got {}'.format(
+        str(prob_norm)
+    )
+    if prob_norm == "softmax":
+        y_pred = tf.nn.softmax(y_score)
+    if prob_norm == "sigmoid":
+        y_pred = tf.sigmoid(y_score)
     x = graph.get_tensor_by_name("input_x:0")
     q = graph.get_tensor_by_name("input_q:0")
 
-    if just_graph: return sess, x, q, y_pred
+    if just_graph:
+        return sess, x, q, y_pred
     else:
-        number_examples = kwargs['y_test'].shape[0]
+        number_examples = kwargs["y_test"].shape[0]
         y_probs = np.empty((0))
-        for start, end in zip(range(0,number_examples,64), range(64,number_examples,64)):
-            feed_dict = {x: kwargs['x_test'][start:end],
-                         q: kwargs['q_test'][start:end]}
-            probs = sess.run(y_pred, feed_dict)[:,0]
+        for start, end in zip(
+            range(0, number_examples, 64), range(64, number_examples, 64)
+        ):
+            feed_dict = {
+                x: kwargs["x_test"][start:end],
+                q: kwargs["q_test"][start:end],
+            }
+            probs = sess.run(y_pred, feed_dict)[:, 0]
             y_probs = np.concatenate([y_probs, probs])
-        feed_dict = {x: kwargs['x_test'][end:],
-                     q: kwargs['q_test'][end:]}
-        probs = sess.run(y_pred, feed_dict)[:,0]
+        feed_dict = {x: kwargs["x_test"][end:], q: kwargs["q_test"][end:]}
+        probs = sess.run(y_pred, feed_dict)[:, 0]
         y_probs = np.concatenate([y_probs, probs])
         sess.close()
         return y_probs
 
+
 ############################# PRIVATE FUNCTIONS ###############################
+
 
 def _do_eval(sess, model, eval_x, eval_q, eval_y, batch_size):
     """
@@ -422,11 +582,16 @@ def _do_eval(sess, model, eval_x, eval_q, eval_y, batch_size):
     """
     number_examples = len(eval_x)
     eval_acc, eval_counter = 0.0, 0
-    for start, end in zip(range(0,number_examples,batch_size), range(batch_size,number_examples,batch_size)):
-        feed_dict = {model.input_x: eval_x[start:end],
-                     model.input_q: eval_q[start:end],
-                     model.input_y: eval_y[start:end]}
+    for start, end in zip(
+        range(0, number_examples, batch_size),
+        range(batch_size, number_examples, batch_size),
+    ):
+        feed_dict = {
+            model.input_x: eval_x[start:end],
+            model.input_q: eval_q[start:end],
+            model.input_y: eval_y[start:end],
+        }
         curr_eval_acc = model.auc.eval(feed_dict)
-        
-        eval_acc,eval_counter = eval_acc+curr_eval_acc, eval_counter+1
-    return eval_acc/float(eval_counter)
+
+        eval_acc, eval_counter = eval_acc + curr_eval_acc, eval_counter + 1
+    return eval_acc / float(eval_counter)

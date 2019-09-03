@@ -17,24 +17,24 @@ from ... import core
 
 def functional_statuses(ccda):
 
-    statuses = ccda.section('functional_statuses')
+    statuses = ccda.section("functional_statuses")
 
-    el = statuses.tag('code')
+    el = statuses.tag("code")
 
-    name = el.attr('displayName')
-    code = el.attr('code')
-    code_system = el.attr('codeSystem')
-    code_system_name = el.attr('codeSystemName')
+    name = el.attr("displayName")
+    code = el.attr("code")
+    code_system = el.attr("codeSystem")
+    code_system_name = el.attr("codeSystemName")
 
     text = None
-    text = core.strip_whitespace(statuses.tag('text').val())
+    text = core.strip_whitespace(statuses.tag("text").val())
 
     data = wrappers.ObjectWrapper(
         name=name,
         code=code,
         code_system=code_system,
         code_system_name=code_system_name,
-        text=text
+        text=text,
     )
 
     return data

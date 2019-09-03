@@ -15,6 +15,7 @@ import seaborn as sns
 
 from sheldon import Vectorizer
 
+
 class T_LSTM(object):
     """
     A Time-Aware-LSTM for EHR classification
@@ -70,17 +71,27 @@ class T_LSTM(object):
     """
 
     def __init__(
-        self, max_sequence_length, hidden_size, num_classes, pretrain_embedding,#variable_size, embedding_size
-        learning_rate, decay_steps, decay_rate, dropout_keep_prob, l2_reg_lambda=0.0, objective='ce',
-        initializer=tf.contrib.layers.xavier_initializer()):
+        self,
+        max_sequence_length,
+        hidden_size,
+        num_classes,
+        pretrain_embedding,  # variable_size, embedding_size
+        learning_rate,
+        decay_steps,
+        decay_rate,
+        dropout_keep_prob,
+        l2_reg_lambda=0.0,
+        objective="ce",
+        initializer=tf.contrib.layers.xavier_initializer(),
+    ):
 
         """init all hyperparameter here"""
         tf.reset_default_graph()
 
         # set hyperparamter
         self.num_classes = num_classes
-#        self.variable_size = variable_size
-#        self.embedding_size = embedding_size
+        #        self.variable_size = variable_size
+        #        self.embedding_size = embedding_size
         self.pretrain_embedding = pretrain_embedding
         self.max_sequence_length = max_sequence_length
         self.hidden_size = hidden_size
@@ -91,103 +102,243 @@ class T_LSTM(object):
 
         self.global_step = tf.Variable(0, trainable=False, name="Global_Step")
         self.epoch_step = tf.Variable(0, trainable=False, name="Epoch_Step")
-        self.epoch_increment = tf.assign(self.epoch_step, tf.add(self.epoch_step, tf.constant(1)))
+        self.epoch_increment = tf.assign(
+            self.epoch_step, tf.add(self.epoch_step, tf.constant(1))
+        )
         self.decay_steps, self.decay_rate = decay_steps, decay_rate
 
         # add placeholder (X, quantity, time and label)
-        self.input_x = tf.placeholder(tf.int32, [None, self.max_sequence_length], name="input_x")  # X [instance_size, num_bucket]
-        self.input_q = tf.placeholder(tf.float32, [None, self.max_sequence_length], name="input_q")  # Q [instance_size, num_bucket]
-        self.input_t = tf.placeholder(tf.int32, [None, self.max_sequence_length], name="input_t") # T [instance_size, num_bucket]
-        self.input_y = tf.placeholder(tf.int8, [None, self.num_classes], name="input_y")  # y [instance_size, num_classes]
+        self.input_x = tf.placeholder(
+            tf.int32, [None, self.max_sequence_length], name="input_x"
+        )  # X [instance_size, num_bucket]
+        self.input_q = tf.placeholder(
+            tf.float32, [None, self.max_sequence_length], name="input_q"
+        )  # Q [instance_size, num_bucket]
+        self.input_t = tf.placeholder(
+            tf.int32, [None, self.max_sequence_length], name="input_t"
+        )  # T [instance_size, num_bucket]
+        self.input_y = tf.placeholder(
+            tf.int8, [None, self.num_classes], name="input_y"
+        )  # y [instance_size, num_classes]
 
         """define all weights here"""
-        with tf.name_scope("embedding"): # embedding matrix
-            #embedding_matrix = tf.truncated_normal((self.variable_size, self.embedding_size), stddev=1/np.sqrt(self.embedding_size))
-            embedding_matrix = tf.concat([self.pretrain_embedding, tf.zeros((1, self.pretrain_embedding.shape[1]))], axis=0)
-            self.Embedding = tf.Variable(embedding_matrix, trainable=True, dtype=tf.float32, name='embedding')
+        with tf.name_scope("embedding"):  # embedding matrix
+            # embedding_matrix = tf.truncated_normal((self.variable_size, self.embedding_size), stddev=1/np.sqrt(self.embedding_size))
+            embedding_matrix = tf.concat(
+                [
+                    self.pretrain_embedding,
+                    tf.zeros((1, self.pretrain_embedding.shape[1])),
+                ],
+                axis=0,
+            )
+            self.Embedding = tf.Variable(
+                embedding_matrix,
+                trainable=True,
+                dtype=tf.float32,
+                name="embedding",
+            )
 
         # main computation graph here: 1. embeddding layer, 2.T-LSTM layer, 3.concat, 4.FC layer 5.softmax
-        #1.get emebedding of tokens
+        # 1.get emebedding of tokens
         embedded_X = tf.nn.embedding_lookup(self.Embedding, self.input_x)
         # concatenate quantity
-        self.input = tf.concat([embedded_X, tf.expand_dims(self.input_q, axis=2)], axis=2) #shape: [batch_size, max_sequence_length, concate_embedding_size]
-        # self.input = tf.concat(values=embedded_X, axis=2) 
+        self.input = tf.concat(
+            [embedded_X, tf.expand_dims(self.input_q, axis=2)], axis=2
+        )  # shape: [batch_size, max_sequence_length, concate_embedding_size]
+        # self.input = tf.concat(values=embedded_X, axis=2)
 
-        #2. Time-Aware-LSTM layer
+        # 2. Time-Aware-LSTM layer
         self.input_size = self.input.get_shape().as_list()[2]
         with tf.name_scope("weight"):
-            self.Wi = self._init_weights(self.input_size, self.hidden_size, name='Input_Hidden_weight',reg=None)
-            self.Ui = tf.nn.dropout(self._init_weights(self.hidden_size, self.hidden_size, name='Input_State_weight',reg=None), self.dropout_keep_prob)
-            self.bi = self._init_bias(self.hidden_size, name='Input_Hidden_bias')
+            self.Wi = self._init_weights(
+                self.input_size,
+                self.hidden_size,
+                name="Input_Hidden_weight",
+                reg=None,
+            )
+            self.Ui = tf.nn.dropout(
+                self._init_weights(
+                    self.hidden_size,
+                    self.hidden_size,
+                    name="Input_State_weight",
+                    reg=None,
+                ),
+                self.dropout_keep_prob,
+            )
+            self.bi = self._init_bias(
+                self.hidden_size, name="Input_Hidden_bias"
+            )
 
-            self.Wf = self._init_weights(self.input_size, self.hidden_size, name='Forget_Hidden_weight',reg=None)
-            self.Uf = tf.nn.dropout(self._init_weights(self.hidden_size, self.hidden_size, name='Forget_State_weight',reg=None), self.dropout_keep_prob)
-            self.bf = self._init_bias(self.hidden_size, name='Forget_Hidden_bias')
+            self.Wf = self._init_weights(
+                self.input_size,
+                self.hidden_size,
+                name="Forget_Hidden_weight",
+                reg=None,
+            )
+            self.Uf = tf.nn.dropout(
+                self._init_weights(
+                    self.hidden_size,
+                    self.hidden_size,
+                    name="Forget_State_weight",
+                    reg=None,
+                ),
+                self.dropout_keep_prob,
+            )
+            self.bf = self._init_bias(
+                self.hidden_size, name="Forget_Hidden_bias"
+            )
 
-            self.Wog = self._init_weights(self.input_size, self.hidden_size, name='Output_Hidden_weight',reg=None)
-            self.Uog = tf.nn.dropout(self._init_weights(self.hidden_size, self.hidden_size, name='Output_State_weight',reg=None), self.dropout_keep_prob)
-            self.bog = self._init_bias(self.hidden_size, name='Output_Hidden_bias')
+            self.Wog = self._init_weights(
+                self.input_size,
+                self.hidden_size,
+                name="Output_Hidden_weight",
+                reg=None,
+            )
+            self.Uog = tf.nn.dropout(
+                self._init_weights(
+                    self.hidden_size,
+                    self.hidden_size,
+                    name="Output_State_weight",
+                    reg=None,
+                ),
+                self.dropout_keep_prob,
+            )
+            self.bog = self._init_bias(
+                self.hidden_size, name="Output_Hidden_bias"
+            )
 
-            self.Wc = self._init_weights(self.input_size, self.hidden_size, name='Cell_Hidden_weight',reg=None)
-            self.Uc = tf.nn.dropout(self._init_weights(self.hidden_size, self.hidden_size, name='Cell_State_weight',reg=None), self.dropout_keep_prob)
-            self.bc = self._init_bias(self.hidden_size, name='Cell_Hidden_bias')
+            self.Wc = self._init_weights(
+                self.input_size,
+                self.hidden_size,
+                name="Cell_Hidden_weight",
+                reg=None,
+            )
+            self.Uc = tf.nn.dropout(
+                self._init_weights(
+                    self.hidden_size,
+                    self.hidden_size,
+                    name="Cell_State_weight",
+                    reg=None,
+                ),
+                self.dropout_keep_prob,
+            )
+            self.bc = self._init_bias(
+                self.hidden_size, name="Cell_Hidden_bias"
+            )
 
-            self.W_decomp = self._init_weights(self.hidden_size, self.hidden_size, name='Decomposition_Hidden_weight',reg=None)
-            self.b_decomp = self._init_bias(self.hidden_size, name='Decomposition_Hidden_bias_enc')
+            self.W_decomp = self._init_weights(
+                self.hidden_size,
+                self.hidden_size,
+                name="Decomposition_Hidden_weight",
+                reg=None,
+            )
+            self.b_decomp = self._init_bias(
+                self.hidden_size, name="Decomposition_Hidden_bias_enc"
+            )
 
             # self.Wo = self._init_weights(self.hidden_size, self.hidden_size*2, name='Fc_Layer_weight',reg=tf.contrib.layers.l2_regularizer(scale=self.l2_reg_lambda))#tf.contrib.layers.l2_regularizer(scale=0.001)
             # self.bo = self._init_bias(self.hidden_size*2, name='Fc_Layer_bias')
 
-            self.W_softmax = self._init_weights(self.hidden_size, self.num_classes, name='Output_Layer_weight', reg=tf.contrib.layers.l2_regularizer(scale=self.l2_reg_lambda))#tf.contrib.layers.l2_regularizer(scale=0.001)
-            self.b_softmax = self._init_bias(self.num_classes, name='Output_Layer_bias')
+            self.W_softmax = self._init_weights(
+                self.hidden_size,
+                self.num_classes,
+                name="Output_Layer_weight",
+                reg=tf.contrib.layers.l2_regularizer(scale=self.l2_reg_lambda),
+            )  # tf.contrib.layers.l2_regularizer(scale=0.001)
+            self.b_softmax = self._init_bias(
+                self.num_classes, name="Output_Layer_bias"
+            )
 
         with tf.name_scope("tlstm"):
             batch_size = tf.shape(self.input)[0]
             scan_input_ = tf.transpose(self.input, perm=[2, 0, 1])
-            scan_input = tf.transpose(scan_input_) # scan input is [seq_length x batch_size x input_size]
-            scan_time = tf.transpose(self.input_t) # scan_time [seq_length x batch_size]
-            initial_hidden = tf.zeros([batch_size, self.hidden_size], tf.float32)
+            scan_input = tf.transpose(
+                scan_input_
+            )  # scan input is [seq_length x batch_size x input_size]
+            scan_time = tf.transpose(
+                self.input_t
+            )  # scan_time [seq_length x batch_size]
+            initial_hidden = tf.zeros(
+                [batch_size, self.hidden_size], tf.float32
+            )
             ini_state_cell = tf.stack([initial_hidden, initial_hidden])
 
             # make scan_time [seq_length x batch_size x 1]
-            scan_time = tf.reshape(scan_time, [tf.shape(scan_time)[0], tf.shape(scan_time)[1], 1])
-            concat_input = tf.concat([tf.cast(scan_time, tf.float32), scan_input],2) # [seq_length x batch_size x input_size+1]
-            packed_hidden_states = tf.scan(self._TLSTM_Unit, concat_input, initializer=ini_state_cell)
+            scan_time = tf.reshape(
+                scan_time, [tf.shape(scan_time)[0], tf.shape(scan_time)[1], 1]
+            )
+            concat_input = tf.concat(
+                [tf.cast(scan_time, tf.float32), scan_input], 2
+            )  # [seq_length x batch_size x input_size+1]
+            packed_hidden_states = tf.scan(
+                self._TLSTM_Unit, concat_input, initializer=ini_state_cell
+            )
             all_states = packed_hidden_states[:, 0, :, :]
-            all_states = tf.identity(all_states, name='hidden_states')
-    
+            all_states = tf.identity(all_states, name="hidden_states")
+
             # attention layer
-            attention_output = self._attention(all_states, self.hidden_size, time_major=True, return_alphas=False)
+            attention_output = self._attention(
+                all_states,
+                self.hidden_size,
+                time_major=True,
+                return_alphas=False,
+            )
             # all_outputs = tf.map_fn(self._get_output, attention_output)
 
         with tf.name_scope("output"):
             # self.logits = tf.identity(tf.reverse(all_outputs, [0])[0, :, :], name='scores')
-            self.logits = tf.nn.xw_plus_b(attention_output, self.W_softmax, self.b_softmax, name='scores')
+            self.logits = tf.nn.xw_plus_b(
+                attention_output, self.W_softmax, self.b_softmax, name="scores"
+            )
             self.probs = tf.nn.softmax(self.logits, name="probs")
 
-        assert objective in ['ce', 'auc'], 'AttributeError: objective only acccept "ce" or "auc", got {}'.format(str(objective))
-        if objective == 'ce':  self.loss_val = self._loss(self.l2_reg_lambda)
-        if objective == 'auc': self.loss_val = self._loss_roc_auc(self.l2_reg_lambda)
+        assert objective in [
+            "ce",
+            "auc",
+        ], 'AttributeError: objective only acccept "ce" or "auc", got {}'.format(
+            str(objective)
+        )
+        if objective == "ce":
+            self.loss_val = self._loss(self.l2_reg_lambda)
+        if objective == "auc":
+            self.loss_val = self._loss_roc_auc(self.l2_reg_lambda)
         self.train_op = self._train()
-        self.predictions = tf.argmax(self.logits, axis=1, name="predictions")  # shape:[None,]
+        self.predictions = tf.argmax(
+            self.logits, axis=1, name="predictions"
+        )  # shape:[None,]
 
         # performance
         with tf.name_scope("performance"):
-            _, self.auc = tf.metrics.auc(self.input_y, self.probs, curve="ROC", name="auc")
-            correct_prediction = tf.equal(tf.cast(self.predictions, tf.int8), self.input_y) #tf.argmax(self.logits, 1)-->[batch_size]
-            self.accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accuracy") # shape=()
+            _, self.auc = tf.metrics.auc(
+                self.input_y, self.probs, curve="ROC", name="auc"
+            )
+            correct_prediction = tf.equal(
+                tf.cast(self.predictions, tf.int8), self.input_y
+            )  # tf.argmax(self.logits, 1)-->[batch_size]
+            self.accuracy = tf.reduce_mean(
+                tf.cast(correct_prediction, tf.float32), name="accuracy"
+            )  # shape=()
 
     def _init_weights(self, input_size, output_dim, name, std=0.1, reg=None):
-        return tf.get_variable(name,shape=[input_size, output_dim],initializer=self.initializer, regularizer = reg)
+        return tf.get_variable(
+            name,
+            shape=[input_size, output_dim],
+            initializer=self.initializer,
+            regularizer=reg,
+        )
 
     def _init_bias(self, output_dim, name):
-        return tf.get_variable(name,shape=[output_dim],initializer=tf.constant_initializer(1.0))
+        return tf.get_variable(
+            name, shape=[output_dim], initializer=tf.constant_initializer(1.0)
+        )
 
     def _map_elapse_time(self, t):
         c1 = tf.constant(1, dtype=tf.float32)
         c2 = tf.constant(2.7183, dtype=tf.float32)
         # T = tf.multiply(self.wt, t) + self.bt
-        T = tf.div(c1, tf.log(t + c2), name='Log_elapse_time') # according to paper, used for large time delta like days
+        T = tf.div(
+            c1, tf.log(t + c2), name="Log_elapse_time"
+        )  # according to paper, used for large time delta like days
         Ones = tf.ones([1, self.hidden_size], dtype=tf.float32)
         T = tf.matmul(T, Ones)
         return T
@@ -196,8 +347,8 @@ class T_LSTM(object):
         prev_hidden_state, prev_cell = tf.unstack(prev_hidden_memory)
 
         batch_size = tf.shape(concat_input)[0]
-        x = tf.slice(concat_input, [0,1], [batch_size, self.input_size])
-        t = tf.slice(concat_input, [0,0], [batch_size,1])
+        x = tf.slice(concat_input, [0, 1], [batch_size, self.input_size])
+        t = tf.slice(concat_input, [0, 0], [batch_size, 1])
 
         # Dealing with time irregularity
         # Map elapse time in days or months
@@ -209,13 +360,29 @@ class T_LSTM(object):
         # if T is 0, then the weight is one
         prev_cell = prev_cell - C_ST + C_ST_dis
 
-        i = tf.sigmoid(tf.matmul(x, self.Wi) + tf.matmul(prev_hidden_state, self.Ui) + self.bi) # Input gate
-        f = tf.sigmoid(tf.matmul(x, self.Wf) + tf.matmul(prev_hidden_state, self.Uf) + self.bf) # Forget Gate
-        o = tf.sigmoid(tf.matmul(x, self.Wog) + tf.matmul(prev_hidden_state, self.Uog) + self.bog) # Output Gate
+        i = tf.sigmoid(
+            tf.matmul(x, self.Wi)
+            + tf.matmul(prev_hidden_state, self.Ui)
+            + self.bi
+        )  # Input gate
+        f = tf.sigmoid(
+            tf.matmul(x, self.Wf)
+            + tf.matmul(prev_hidden_state, self.Uf)
+            + self.bf
+        )  # Forget Gate
+        o = tf.sigmoid(
+            tf.matmul(x, self.Wog)
+            + tf.matmul(prev_hidden_state, self.Uog)
+            + self.bog
+        )  # Output Gate
 
-        C = tf.nn.tanh(tf.matmul(x, self.Wc) + tf.matmul(prev_hidden_state, self.Uc) + self.bc) # Candidate Memory Cell
-        Ct = f * prev_cell + i * C # Current Memory cell
-        current_hidden_state = o * tf.nn.tanh(Ct) # Current Hidden state
+        C = tf.nn.tanh(
+            tf.matmul(x, self.Wc)
+            + tf.matmul(prev_hidden_state, self.Uc)
+            + self.bc
+        )  # Candidate Memory Cell
+        Ct = f * prev_cell + i * C  # Current Memory cell
+        current_hidden_state = o * tf.nn.tanh(Ct)  # Current Hidden state
 
         return tf.stack([current_hidden_state, Ct])
 
@@ -225,7 +392,9 @@ class T_LSTM(object):
         output = tf.matmul(output, self.W_softmax) + self.b_softmax
         return output
 
-    def _attention(self, inputs, attention_size, time_major=False, return_alphas=False):
+    def _attention(
+        self, inputs, attention_size, time_major=False, return_alphas=False
+    ):
         """
         Attention mechanism layer which reduces RNN/Bi-RNN outputs with Attention vector.
         The idea was proposed in the article by Z. Yang et al., "Hierarchical Attention Networks
@@ -278,24 +447,30 @@ class T_LSTM(object):
             # (T,B,D) => (B,T,D)
             inputs = tf.transpose(inputs, [1, 0, 2])
 
-        hidden_size = inputs.shape[2].value  # D value - hidden size of the RNN layer
+        hidden_size = inputs.shape[
+            2
+        ].value  # D value - hidden size of the RNN layer
 
         # Trainable parameters
-        w_omega = tf.Variable(tf.random_normal([hidden_size, attention_size], stddev=0.1))
+        w_omega = tf.Variable(
+            tf.random_normal([hidden_size, attention_size], stddev=0.1)
+        )
         b_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
         u_omega = tf.Variable(tf.random_normal([attention_size], stddev=0.1))
 
-        with tf.name_scope('v'):
+        with tf.name_scope("v"):
             # Applying fully connected layer with non-linear activation to each of the B*T timestamps;
             #  the shape of `v` is (B,T,D)*(D,A)=(B,T,A), where A=attention_size
             v = tf.tanh(tf.tensordot(inputs, w_omega, axes=1) + b_omega)
 
         # For each of the timestamps its vector of size A from `v` is reduced with `u` vector
-        vu = tf.tensordot(v, u_omega, axes=1, name='vu')  # (B,T) shape
-        alphas = tf.nn.softmax(vu, name='alphas')         # (B,T) shape
+        vu = tf.tensordot(v, u_omega, axes=1, name="vu")  # (B,T) shape
+        alphas = tf.nn.softmax(vu, name="alphas")  # (B,T) shape
 
         # Output of (Bi-)RNN is reduced with attention vector; the result has (B,D) shape
-        output = tf.reduce_sum(inputs * tf.expand_dims(alphas, -1), 1, name='attention_output')
+        output = tf.reduce_sum(
+            inputs * tf.expand_dims(alphas, -1), 1, name="attention_output"
+        )
 
         if not return_alphas:
             return output
@@ -306,17 +481,39 @@ class T_LSTM(object):
         """
         based on the loss, use Adam to update parameter
         """
-        learning_rate = tf.train.exponential_decay(self.learning_rate, self.global_step, self.decay_steps,self.decay_rate, staircase=True)
-        train_op = tf.contrib.layers.optimize_loss(self.loss_val, global_step=self.global_step, learning_rate=learning_rate, optimizer="Adam")
+        learning_rate = tf.train.exponential_decay(
+            self.learning_rate,
+            self.global_step,
+            self.decay_steps,
+            self.decay_rate,
+            staircase=True,
+        )
+        train_op = tf.contrib.layers.optimize_loss(
+            self.loss_val,
+            global_step=self.global_step,
+            learning_rate=learning_rate,
+            optimizer="Adam",
+        )
         return train_op
 
     def _loss(self, l2_reg_lambda):
         with tf.name_scope("loss"):
-            #input: `logits` and `labels` must have the same shape `[batch_size, num_classes]`
-            #output: A 1-D `Tensor` of length `batch_size` of the same type as `logits` with the softmax cross entropy loss.
-            losses = tf.nn.softmax_cross_entropy_with_logits_v2(labels=self.input_y, logits=self.logits)
+            # input: `logits` and `labels` must have the same shape `[batch_size, num_classes]`
+            # output: A 1-D `Tensor` of length `batch_size` of the same type as `logits` with the softmax cross entropy loss.
+            losses = tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels=self.input_y, logits=self.logits
+            )
             loss = tf.reduce_mean(losses)
-            l2_losses = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_reg_lambda
+            l2_losses = (
+                tf.add_n(
+                    [
+                        tf.nn.l2_loss(v)
+                        for v in tf.trainable_variables()
+                        if "bias" not in v.name
+                    ]
+                )
+                * l2_reg_lambda
+            )
             loss = loss + l2_losses
         return loss
 
@@ -337,16 +534,37 @@ class T_LSTM(object):
 
         # original paper suggests performance is robust to exact parameter choice
         gamma = 0.2
-        p     = 3
+        p = 3
 
         difference = tf.zeros_like(pos * neg) + pos - neg - gamma
         masked = tf.boolean_mask(difference, difference < 0.0)
         loss = tf.reduce_sum(tf.pow(-masked, p))
-        l2_losses = tf.add_n([tf.nn.l2_loss(v) for v in tf.trainable_variables() if 'bias' not in v.name]) * l2_reg_lambda
+        l2_losses = (
+            tf.add_n(
+                [
+                    tf.nn.l2_loss(v)
+                    for v in tf.trainable_variables()
+                    if "bias" not in v.name
+                ]
+            )
+            * l2_reg_lambda
+        )
         loss = loss + l2_losses
         return loss
 
-def train_rnn(model, t_train, x_train, q_train, y_train, dev_sample_percentage, num_epochs, batch_size, evaluate_every, model_path):
+
+def train_rnn(
+    model,
+    t_train,
+    x_train,
+    q_train,
+    y_train,
+    dev_sample_percentage,
+    num_epochs,
+    batch_size,
+    evaluate_every,
+    model_path,
+):
     """
     Training module for T_LSTM objectives
     
@@ -395,13 +613,13 @@ def train_rnn(model, t_train, x_train, q_train, y_train, dev_sample_percentage, 
     # get number of input exemplars
     training_size = y_train.shape[0]
 
-#    # shuffle and partition the input into trainging set and developmenet set
-#    np.random.seed(10)
-#    shuffle_indices = np.random.permutation(np.arange(y_train.shape[0]))
-#    t_train = t_train[shuffle_indices]
-#    x_train = x_train[shuffle_indices]
-#    q_train = q_train[shuffle_indices]
-#    y_train = y_train[shuffle_indices]
+    #    # shuffle and partition the input into trainging set and developmenet set
+    #    np.random.seed(10)
+    #    shuffle_indices = np.random.permutation(np.arange(y_train.shape[0]))
+    #    t_train = t_train[shuffle_indices]
+    #    x_train = x_train[shuffle_indices]
+    #    q_train = q_train[shuffle_indices]
+    #    y_train = y_train[shuffle_indices]
 
     dev_sample_index = -1 * int(dev_sample_percentage * float(training_size))
     t_train, t_dev = t_train[:dev_sample_index], t_train[dev_sample_index:]
@@ -415,8 +633,8 @@ def train_rnn(model, t_train, x_train, q_train, y_train, dev_sample_percentage, 
     with graph.as_default():
 
         # configurate TensorFlow session, enable GPU accelerated if possible
-        config=tf.ConfigProto(log_device_placement=True)
-        config.gpu_options.allow_growth=True
+        config = tf.ConfigProto(log_device_placement=True)
+        config.gpu_options.allow_growth = True
         with tf.Session(config=config) as sess:
             saver = tf.train.Saver()
 
@@ -424,43 +642,65 @@ def train_rnn(model, t_train, x_train, q_train, y_train, dev_sample_percentage, 
             sess.run(tf.global_variables_initializer())
             sess.run(tf.local_variables_initializer())
 
-            print('start time:', datetime.now())
+            print("start time:", datetime.now())
             # create model root path if not exists
-            if not os.path.exists(model_path): os.mkdir(model_path)
+            if not os.path.exists(model_path):
+                os.mkdir(model_path)
 
             # get current epoch
             curr_epoch = sess.run(model.epoch_step)
             for epoch in range(curr_epoch, num_epochs):
-                print('Epoch', epoch+1, '...')
+                print("Epoch", epoch + 1, "...")
                 counter = 0
 
                 # loop batch training
-                for start, end in zip(range(0, training_size, batch_size), range(batch_size, training_size, batch_size)):
+                for start, end in zip(
+                    range(0, training_size, batch_size),
+                    range(batch_size, training_size, batch_size),
+                ):
                     epoch_x = x_train[start:end]
                     epoch_t = t_train[start:end]
                     epoch_q = q_train[start:end]
                     epoch_y = y_train[start:end]
 
                     # create model inputs
-                    feed_dict = {model.input_x: epoch_x, model.input_q: epoch_q, model.input_t: epoch_t, model.input_y: epoch_y}
+                    feed_dict = {
+                        model.input_x: epoch_x,
+                        model.input_q: epoch_q,
+                        model.input_t: epoch_t,
+                        model.input_y: epoch_y,
+                    }
 
                     # train one step
-                    curr_loss, _ = sess.run([model.loss_val, model.train_op], feed_dict)
-                    counter = counter+1
+                    curr_loss, _ = sess.run(
+                        [model.loss_val, model.train_op], feed_dict
+                    )
+                    counter = counter + 1
 
                     # evaluation
                     if counter % evaluate_every == 0:
                         train_accu = model.auc.eval(feed_dict)
-                        dev_accu = _do_eval(sess, model, x_dev, t_dev, q_dev, y_dev, batch_size)
-                        print('Step: {: <6}  |  Loss: {:2.10f}  |  Training AUROC: {:2.8f}  |  Development AUROC: {:2.8f}'.format(counter, curr_loss, train_accu, dev_accu))
+                        dev_accu = _do_eval(
+                            sess, model, x_dev, t_dev, q_dev, y_dev, batch_size
+                        )
+                        print(
+                            "Step: {: <6}  |  Loss: {:2.10f}  |  Training AUROC: {:2.8f}  |  Development AUROC: {:2.8f}".format(
+                                counter, curr_loss, train_accu, dev_accu
+                            )
+                        )
                 sess.run(model.epoch_increment)
 
-                # write model into disk at the end of each 10 epoch     if epoch > 9 and epoch % 10 == 9: 
-                saver.save(sess, model_path+'/model', global_step=model.global_step)
-                print('='*100)
-            print('End time:', datetime.now())
+                # write model into disk at the end of each 10 epoch     if epoch > 9 and epoch % 10 == 9:
+                saver.save(
+                    sess, model_path + "/model", global_step=model.global_step
+                )
+                print("=" * 100)
+            print("End time:", datetime.now())
 
-def test_rnn(model_path, step=None, prob_norm='softmax', just_graph=False, **kwargs):
+
+def test_rnn(
+    model_path, step=None, prob_norm="softmax", just_graph=False, **kwargs
+):
     """
     Testing module for T_LSTM models
     
@@ -550,72 +790,117 @@ def test_rnn(model_path, step=None, prob_norm='softmax', just_graph=False, **kwa
 
     # Recreate the network graph. At this step only graph is created.
     if step:
-        saver = tf.train.import_meta_graph(os.path.join(model_path.rstrip('/'), 'model-'+str(step)+'.meta'))
-        saver.restore(sess, os.path.join(model_path.rstrip('/'), 'model-'+str(step)))
+        saver = tf.train.import_meta_graph(
+            os.path.join(
+                model_path.rstrip("/"), "model-" + str(step) + ".meta"
+            )
+        )
+        saver.restore(
+            sess, os.path.join(model_path.rstrip("/"), "model-" + str(step))
+        )
     else:
-        saver = tf.train.import_meta_graph(os.path.join(model_path.rstrip('/'), 'model.meta'))
+        saver = tf.train.import_meta_graph(
+            os.path.join(model_path.rstrip("/"), "model.meta")
+        )
         saver.restore(sess, tf.train.latest_checkpoint(model_path))
     graph = tf.get_default_graph()
 
     # restore graph names for predictions
-    assert prob_norm in ['softmax', 'sigmoid'], 'AttributeError: prob_norm only acccept "softmax" or "sigmoid", got {}'.format(str(prob_norm))
-    if prob_norm == 'softmax': y_pred = graph.get_tensor_by_name("output/probs:0")
-    if prob_norm == 'sigmoid':
+    assert prob_norm in [
+        "softmax",
+        "sigmoid",
+    ], 'AttributeError: prob_norm only acccept "softmax" or "sigmoid", got {}'.format(
+        str(prob_norm)
+    )
+    if prob_norm == "softmax":
+        y_pred = graph.get_tensor_by_name("output/probs:0")
+    if prob_norm == "sigmoid":
         y_score = graph.get_tensor_by_name("output/scores:0")
         y_pred = tf.sigmoid(y_score)
     x = graph.get_tensor_by_name("input_x:0")
     t = graph.get_tensor_by_name("input_t:0")
     q = graph.get_tensor_by_name("input_q:0")
 
-    if just_graph: return sess, t, x, q, y_pred
+    if just_graph:
+        return sess, t, x, q, y_pred
     else:
-        number_examples = kwargs['t_test'].shape[0]
+        number_examples = kwargs["t_test"].shape[0]
         y_probs = np.empty((0))
-        for start, end in zip(range(0,number_examples,64), range(64,number_examples,64)):
-            feed_dict = {x: kwargs['x_test'][start:end],
-                         t: kwargs['t_test'][start:end],
-                         q: kwargs['q_test'][start:end]}
-            probs = sess.run(y_pred, feed_dict)[:,0]
+        for start, end in zip(
+            range(0, number_examples, 64), range(64, number_examples, 64)
+        ):
+            feed_dict = {
+                x: kwargs["x_test"][start:end],
+                t: kwargs["t_test"][start:end],
+                q: kwargs["q_test"][start:end],
+            }
+            probs = sess.run(y_pred, feed_dict)[:, 0]
             y_probs = np.concatenate([y_probs, probs])
-        feed_dict = {x: kwargs['x_test'][end:],
-                     t: kwargs['t_test'][end:],
-                     q: kwargs['q_test'][end:]}
-        probs = sess.run(y_pred, feed_dict)[:,0]
+        feed_dict = {
+            x: kwargs["x_test"][end:],
+            t: kwargs["t_test"][end:],
+            q: kwargs["q_test"][end:],
+        }
+        probs = sess.run(y_pred, feed_dict)[:, 0]
         y_probs = np.concatenate([y_probs, probs])
         sess.close()
         return y_probs
 
+
 def interpret(model_path, step, t_, x_, q_, label):
-    if len(t_.shape) == 1: t_, x_, q_ = np.expand_dims(t_, 0), np.expand_dims(x_, 0), np.expand_dims(q_, 0)
-    
+    if len(t_.shape) == 1:
+        t_, x_, q_ = (
+            np.expand_dims(t_, 0),
+            np.expand_dims(x_, 0),
+            np.expand_dims(q_, 0),
+        )
+
     tf.reset_default_graph()
     sess = tf.Session()
     sess.as_default()
 
     # Recreate the network graph. At this step only graph is created.
     if step:
-        saver = tf.train.import_meta_graph(os.path.join(model_path.rstrip('/'), 'model-'+str(step)+'.meta'))
-        saver.restore(sess, os.path.join(model_path.rstrip('/'), 'model-'+str(step)))
+        saver = tf.train.import_meta_graph(
+            os.path.join(
+                model_path.rstrip("/"), "model-" + str(step) + ".meta"
+            )
+        )
+        saver.restore(
+            sess, os.path.join(model_path.rstrip("/"), "model-" + str(step))
+        )
     else:
-        saver = tf.train.import_meta_graph(os.path.join(model_path.rstrip('/'), 'model.meta'))
+        saver = tf.train.import_meta_graph(
+            os.path.join(model_path.rstrip("/"), "model.meta")
+        )
         saver.restore(sess, tf.train.latest_checkpoint(model_path))
     graph = tf.get_default_graph()
-    
+
     states = graph.get_tensor_by_name("tlstm/vu:0")
-    x      = graph.get_tensor_by_name("input_x:0")
-    t      = graph.get_tensor_by_name("input_t:0")
-    q      = graph.get_tensor_by_name("input_q:0")
-    
+    x = graph.get_tensor_by_name("input_x:0")
+    t = graph.get_tensor_by_name("input_t:0")
+    q = graph.get_tensor_by_name("input_q:0")
+
     output = sess.run(states, {x: x_, t: t_, q: q_})[:, -30:].T
-    
-    vec    = Vectorizer()
+
+    vec = Vectorizer()
     tokens = [_get_variables(c, vec) for c in x_[0][-30:]]
-    
-    fig, ax = plt.subplots(figsize=(2,8))
-    sns.heatmap(output, xticklabels=[label], cmap='coolwarm', yticklabels=tokens, vmin=-15, vmax=15, ax=ax)
+
+    fig, ax = plt.subplots(figsize=(2, 8))
+    sns.heatmap(
+        output,
+        xticklabels=[label],
+        cmap="coolwarm",
+        yticklabels=tokens,
+        vmin=-15,
+        vmax=15,
+        ax=ax,
+    )
     sess.close()
 
+
 ############################# PRIVATE FUNCTIONS ###############################
+
 
 def _do_eval(sess, model, eval_x, eval_t, eval_q, eval_y, batch_size):
     """
@@ -623,18 +908,29 @@ def _do_eval(sess, model, eval_x, eval_t, eval_q, eval_y, batch_size):
     """
     number_examples = len(eval_x)
     eval_acc, eval_counter = 0.0, 0
-    for start, end in zip(range(0,number_examples,batch_size), range(batch_size,number_examples,batch_size)):
-        feed_dict = {model.input_x: eval_x[start:end],
-                     model.input_q: eval_q[start:end],
-                     model.input_t: eval_t[start:end],
-                     model.input_y: eval_y[start:end]}
+    for start, end in zip(
+        range(0, number_examples, batch_size),
+        range(batch_size, number_examples, batch_size),
+    ):
+        feed_dict = {
+            model.input_x: eval_x[start:end],
+            model.input_q: eval_q[start:end],
+            model.input_t: eval_t[start:end],
+            model.input_y: eval_y[start:end],
+        }
         curr_eval_acc = model.auc.eval(feed_dict)
-        
-        eval_acc,eval_counter = eval_acc+curr_eval_acc, eval_counter+1
-    return eval_acc/float(eval_counter)
+
+        eval_acc, eval_counter = eval_acc + curr_eval_acc, eval_counter + 1
+    return eval_acc / float(eval_counter)
+
 
 def _get_variables(i, vec):
-    id2token = dict(zip(vec.vocab.token2id.values(), vec.vocab.token2id.keys()))
-    if i < len(vec.all_variables): return vec.all_variables[i]
-    elif i < vec.variable_size: return id2token[i-len(vec.all_variables)]
-    else: return 'NONE'
+    id2token = dict(
+        zip(vec.vocab.token2id.values(), vec.vocab.token2id.keys())
+    )
+    if i < len(vec.all_variables):
+        return vec.all_variables[i]
+    elif i < vec.variable_size:
+        return id2token[i - len(vec.all_variables)]
+    else:
+        return "NONE"
